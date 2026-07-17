@@ -19,6 +19,8 @@ import os
 import json
 import time
 import logging
+import re
+import unicodedata
 import requests
 import feedparser
 from datetime import datetime, timezone, timedelta
@@ -40,6 +42,8 @@ MAX_AGE_HOURS = float(os.getenv("MAX_AGE_HOURS", 5))
 MIN_SCORE_TO_SEND_DEFAULT = int(os.getenv("MIN_SCORE_TO_SEND", 30))
 SEEN_FILE = "seen_items.json"
 SIGNATURES_FILE = "sent_signatures.json"
+MAX_ITEMS_PER_TOPIC = int(os.getenv("MAX_ITEMS_PER_TOPIC", 3))
+DEDUPE_HOURS = int(os.getenv("DEDUPE_HOURS", 72))
 
 logging.basicConfig(
     level=logging.INFO,
@@ -68,6 +72,28 @@ STOPWORDS = {
     "the", "and", "for", "with", "from", "this", "that", "will", "have",
     "yang", "dan", "atau", "untuk", "dari", "dengan", "ini", "itu", "akan",
     "into", "over", "about", "after", "before", "says", "said",
+}
+
+TOPIC_RELEVANCE = {
+    "ai": {
+        "ai", "artificial intelligence", "chatgpt", "openai", "anthropic",
+        "claude", "gemini", "llm", "machine learning", "deepmind", "grok",
+        "generative ai", "neural network", "model",
+    },
+    "crypto": {
+        "crypto", "bitcoin", "btc", "ethereum", "eth", "blockchain",
+        "token", "stablecoin", "defi", "web3", "solana", "binance", "coinbase",
+    },
+    "ai_tools": {
+        "ai", "artificial intelligence", "chatgpt", "openai", "claude",
+        "gemini", "llm", "model", "agent", "generative",
+    },
+}
+
+LOW_VALUE_PATTERNS = {
+    "price prediction", "price analysis", "technical analysis", "daily horoscope",
+    "weekly roundup", "morning brief", "live updates", "what we know",
+    "watch now", "photos", "photo gallery", "full list", "recap",
 }
 
 BIG_UPDATE_KEYWORDS = {
@@ -130,15 +156,13 @@ AI_TOOLS_KEYWORDS = {
     "workflow otomatis", "tips ai", "trik ai",
 }
 
-
 def keyword_boost(text, extra_keywords=None):
-    lower = text.lower()
     boost = 0
-    if any(kw in lower for kw in BIG_UPDATE_KEYWORDS):
+    if contains_phrase(text, BIG_UPDATE_KEYWORDS):
         boost += 20
-    if any(kw in lower for kw in CONTROVERSY_KEYWORDS):
+    if contains_phrase(text, CONTROVERSY_KEYWORDS):
         boost += 25
-    if extra_keywords and any(kw in lower for kw in extra_keywords):
+    if extra_keywords and contains_phrase(text, extra_keywords):
         boost += 25
     return boost
 
@@ -302,14 +326,31 @@ def load_signatures():
         try:
             with open(SIGNATURES_FILE, "r") as f:
                 raw = json.load(f)
-            return {k: [set(kws) for kws in v] for k, v in raw.items()}
+            now = time.time()
+            result = {}
+            for key, entries in raw.items():
+                cleaned = []
+                for entry in entries:
+                    if isinstance(entry, dict):
+                        timestamp = float(entry.get("timestamp", now))
+                        if now - timestamp <= DEDUPE_HOURS * 3600:
+                            cleaned.append(entry)
+                    elif isinstance(entry, list):
+                        # Migrasi format lama. Dipertahankan satu periode dedupe.
+                        cleaned.append({"tokens": entry, "entities": [], "timestamp": now})
+                result[key] = cleaned
+            return result
         except Exception:
             return {}
     return {}
 
 
 def save_signatures(sig_dict):
-    trimmed = {k: [sorted(s) for s in v[-500:]] for k, v in sig_dict.items()}
+    cutoff = time.time() - DEDUPE_HOURS * 3600
+    trimmed = {
+        k: [entry for entry in entries if entry.get("timestamp", 0) >= cutoff][-500:]
+        for k, entries in sig_dict.items()
+    }
     with open(SIGNATURES_FILE, "w") as f:
         json.dump(trimmed, f)
 
@@ -413,9 +454,79 @@ def fetch_twitter_items(queries):
 # SISTEM SCORING VIRAL (0-100)
 # ============================================================
 
+def normalize_text(text):
+    text = unicodedata.normalize("NFKD", text or "")
+    text = "".join(ch for ch in text if not unicodedata.combining(ch)).lower()
+    return re.sub(r"[^a-z0-9]+", " ", text).strip()
+
+
 def get_keywords(title):
-    words = title.lower().replace(",", " ").replace(".", " ").split()
-    return {w for w in words if len(w) > 4 and w not in STOPWORDS}
+    words = normalize_text(title).split()
+    return {w for w in words if len(w) >= 3 and w not in STOPWORDS}
+
+
+def get_entities(title):
+    """Angka dan nama/proyek yang relatif khas membantu mengenali parafrasa."""
+    raw_words = re.findall(r"\b[A-Z][A-Za-z0-9.-]{2,}\b|\b\d+(?:[.,]\d+)?%?\b", title or "")
+    return {normalize_text(word) for word in raw_words if normalize_text(word)}
+
+
+def make_signature(title):
+    return {
+        "tokens": sorted(get_keywords(title)),
+        "entities": sorted(get_entities(title)),
+        "timestamp": time.time(),
+    }
+
+
+def signature_similarity(left, right):
+    left_tokens, right_tokens = set(left.get("tokens", [])), set(right.get("tokens", []))
+    if not left_tokens or not right_tokens:
+        return 0.0
+    overlap = left_tokens & right_tokens
+    jaccard = len(overlap) / len(left_tokens | right_tokens)
+    containment = len(overlap) / min(len(left_tokens), len(right_tokens))
+    left_entities, right_entities = set(left.get("entities", [])), set(right.get("entities", []))
+    entity_match = bool(left_entities & right_entities)
+    return max(jaccard, containment * (0.9 if entity_match else 0.72))
+
+
+def is_duplicate_signature(candidate, previous):
+    return signature_similarity(candidate, previous) >= 0.56
+
+
+def contains_phrase(text, phrases):
+    normalized = f" {normalize_text(text)} "
+    return any(f" {normalize_text(phrase)} " in normalized for phrase in phrases)
+
+
+def passes_content_filter(profile, item):
+    key = profile["key"]
+    text = f"{item['title']} {item.get('preview', '')}"
+    normalized = normalize_text(text)
+
+    if contains_phrase(normalized, LOW_VALUE_PATTERNS):
+        return False, "low-value/rutin"
+
+    required = TOPIC_RELEVANCE.get(key)
+    if required and not contains_phrase(normalized, required):
+        return False, "tidak relevan dengan topic"
+
+    if key == "ai_tools":
+        tool_signal = contains_phrase(normalized, AI_TOOLS_KEYWORDS) or contains_phrase(
+            normalized, {"github", "tool", "app", "tutorial", "workflow", "api", "open source", "self hosted"}
+        )
+        if not tool_signal:
+            return False, "bukan tools/tutorial"
+
+    # Topic viral dan entertainment harus punya sinyal kuat, bukan berita rutin.
+    if key in {"viral_id", "entertainment_id", "viral_global"}:
+        if not contains_phrase(normalized, profile.get("extra_keywords") or set()) and not contains_phrase(
+            normalized, BIG_UPDATE_KEYWORDS | CONTROVERSY_KEYWORDS
+        ):
+            return False, "tidak punya angle konten kuat"
+
+    return True, ""
 
 
 def compute_viral_scores(items, extra_keywords=None):
@@ -430,7 +541,7 @@ def compute_viral_scores(items, extra_keywords=None):
         if source == "X/Twitter":
             score += min((raw or 0) / 20, 40)
         else:
-            score += 15
+            score += 5
 
         score += keyword_boost(item["title"] + " " + item.get("preview", ""), extra_keywords)
 
@@ -438,7 +549,9 @@ def compute_viral_scores(items, extra_keywords=None):
         for other in items:
             if other is item or other["source"] == source:
                 continue
-            if len(item["_kw"] & other["_kw"]) >= 2:
+            left = {"tokens": item["_kw"], "entities": get_entities(item["title"])}
+            right = {"tokens": other["_kw"], "entities": get_entities(other["title"])}
+            if signature_similarity(left, right) >= 0.48:
                 matched_sources.add(other["source"])
 
         extra_sources = len(matched_sources) - 1
@@ -535,15 +648,25 @@ def run_profile(profile, seen, signatures):
     for item in all_items:
         item["_uid"] = f"{key}:{item['id']}"
 
-    new_items = [
+    candidates = [
         item for item in all_items
         if item["id"] and item["_uid"] not in seen and item["viral_score"] >= profile["min_score"]
     ]
+    new_items = []
+    rejected_content = 0
+    for item in candidates:
+        passed, reason = passes_content_filter(profile, item)
+        if passed:
+            new_items.append(item)
+        else:
+            rejected_content += 1
+            log.info(f"[{label}] Ditolak ({reason}): {item['title'][:80]}")
     new_items.sort(key=lambda x: x["viral_score"], reverse=True)
 
     log.info(
         f"[{label}] Ketemu {len(all_items)} item total, "
-        f"{len(new_items)} lolos kurasi (skor >= {profile['min_score']})."
+        f"{len(new_items)} lolos kurasi (skor >= {profile['min_score']}), "
+        f"{rejected_content} ditolak filter konten."
     )
 
     # --- Filter duplikat: skip kalau judulnya mirip (>=2 keyword sama) sama
@@ -555,31 +678,32 @@ def run_profile(profile, seen, signatures):
     skipped_dupe = 0
 
     for item in new_items:
-        kw = get_keywords(item["title"])
-        is_dupe = any(len(kw & s) >= 2 for s in sig_list) or any(
-            len(kw & s) >= 2 for s in accepted_this_run
+        signature = make_signature(item["title"])
+        is_dupe = any(is_duplicate_signature(signature, old) for old in sig_list) or any(
+            is_duplicate_signature(signature, old) for old in accepted_this_run
         )
         if is_dupe:
             seen.add(item["_uid"])  # jangan dipertimbangkan lagi ke depannya
             skipped_dupe += 1
             continue
         final_items.append(item)
-        accepted_this_run.append(kw)
+        accepted_this_run.append(signature)
 
     if skipped_dupe:
         log.info(f"[{label}] {skipped_dupe} item di-skip karena mirip/duplikat.")
+
+    final_items = final_items[:MAX_ITEMS_PER_TOPIC]
 
     for item in final_items:
         success = send_telegram_message(TELEGRAM_CHAT_ID, format_message(item), thread_id=thread_id)
         if success:
             log.info(f"[{label}] Berhasil kirim: {item['title'][:60]}")
             seen.add(item["_uid"])
-            sig_list.append(get_keywords(item["title"]))
+            sig_list.append(make_signature(item["title"]))
         time.sleep(1)
 
-    for item in all_items:
-        if item["id"]:
-            seen.add(item["_uid"])
+    # Hanya item yang benar-benar dikirim atau duplikat yang dibuat permanen.
+    # Kandidat yang belum cukup kuat boleh dinilai ulang pada siklus berikutnya.
 
 
 # ============================================================
