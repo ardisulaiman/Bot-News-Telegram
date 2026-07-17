@@ -39,6 +39,7 @@ TEST_MODE = os.getenv("TEST_MODE", "0") == "1"
 MAX_AGE_HOURS = float(os.getenv("MAX_AGE_HOURS", 5))
 MIN_SCORE_TO_SEND_DEFAULT = int(os.getenv("MIN_SCORE_TO_SEND", 30))
 SEEN_FILE = "seen_items.json"
+SIGNATURES_FILE = "sent_signatures.json"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -212,7 +213,7 @@ PROFILES = [
         "key": "entertainment_id",
         "label": "\U0001F3AC Entertainment Indonesia",
         "thread_id": _get_thread_id("TOPIC_ENTERTAINMENT_THREAD_ID"),
-        "min_score": 35,
+        "min_score": 45,
         "rss_feeds": {
             "KapanLagi": "https://www.kapanlagi.com/feed",
             "Liputan6 Showbiz": "https://feed.liputan6.com/rss/showbiz",
@@ -291,6 +292,25 @@ def load_seen():
 def save_seen(seen_set):
     trimmed = list(seen_set)[-5000:]
     with open(SEEN_FILE, "w") as f:
+        json.dump(trimmed, f)
+
+
+def load_signatures():
+    """Simpen 'sidik jari' keyword tiap berita yang udah dikirim, per topic.
+    Dipake buat cegah berita yang MIRIP (walau link/id beda) kekirim lagi."""
+    if os.path.exists(SIGNATURES_FILE):
+        try:
+            with open(SIGNATURES_FILE, "r") as f:
+                raw = json.load(f)
+            return {k: [set(kws) for kws in v] for k, v in raw.items()}
+        except Exception:
+            return {}
+    return {}
+
+
+def save_signatures(sig_dict):
+    trimmed = {k: [sorted(s) for s in v[-500:]] for k, v in sig_dict.items()}
+    with open(SIGNATURES_FILE, "w") as f:
         json.dump(trimmed, f)
 
 
@@ -497,7 +517,7 @@ def format_message(item):
 # JALANIN 1 PROFIL/TOPIK
 # ============================================================
 
-def run_profile(profile, seen):
+def run_profile(profile, seen, signatures):
     key = profile["key"]
     label = profile["label"]
     thread_id = profile["thread_id"]
@@ -526,11 +546,35 @@ def run_profile(profile, seen):
         f"{len(new_items)} lolos kurasi (skor >= {profile['min_score']})."
     )
 
+    # --- Filter duplikat: skip kalau judulnya mirip (>=2 keyword sama) sama
+    # berita yang UDAH PERNAH dikirim sebelumnya (persisted) atau yang lagi
+    # mau dikirim di batch ini juga (misal dari 2 sumber beda, cerita sama).
+    sig_list = signatures.setdefault(key, [])
+    accepted_this_run = []
+    final_items = []
+    skipped_dupe = 0
+
     for item in new_items:
+        kw = get_keywords(item["title"])
+        is_dupe = any(len(kw & s) >= 2 for s in sig_list) or any(
+            len(kw & s) >= 2 for s in accepted_this_run
+        )
+        if is_dupe:
+            seen.add(item["_uid"])  # jangan dipertimbangkan lagi ke depannya
+            skipped_dupe += 1
+            continue
+        final_items.append(item)
+        accepted_this_run.append(kw)
+
+    if skipped_dupe:
+        log.info(f"[{label}] {skipped_dupe} item di-skip karena mirip/duplikat.")
+
+    for item in final_items:
         success = send_telegram_message(TELEGRAM_CHAT_ID, format_message(item), thread_id=thread_id)
         if success:
             log.info(f"[{label}] Berhasil kirim: {item['title'][:60]}")
             seen.add(item["_uid"])
+            sig_list.append(get_keywords(item["title"]))
         time.sleep(1)
 
     for item in all_items:
@@ -544,12 +588,14 @@ def run_profile(profile, seen):
 
 def run_once():
     seen = load_seen()
+    signatures = load_signatures()
     for profile in PROFILES:
         try:
-            run_profile(profile, seen)
+            run_profile(profile, seen, signatures)
         except Exception as e:
             log.error(f"[{profile['label']}] Error gak terduga: {e}")
     save_seen(seen)
+    save_signatures(signatures)
 
 
 def main():
