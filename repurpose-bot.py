@@ -44,7 +44,7 @@ MAX_AGE_HOURS = float(os.getenv("MAX_AGE_HOURS", 5))
 MIN_SCORE_TO_SEND_DEFAULT = int(os.getenv("MIN_SCORE_TO_SEND", 30))
 SEEN_FILE = "seen_items.json"
 SIGNATURES_FILE = "sent_signatures.json"
-MAX_ITEMS_PER_TOPIC = int(os.getenv("MAX_ITEMS_PER_TOPIC", 3))
+MAX_ITEMS_PER_TOPIC = int(os.getenv("MAX_ITEMS_PER_TOPIC", 6))
 AI_TOOLS_MAX_ITEMS = int(os.getenv("AI_TOOLS_MAX_ITEMS", 10))
 DEDUPE_HOURS = int(os.getenv("DEDUPE_HOURS", 72))
 TRANSLATE_SOURCE_LANG = os.getenv("TRANSLATE_SOURCE_LANG", "en")
@@ -188,7 +188,7 @@ PROFILES = [
         "key": "ai",
         "label": "\U0001F916 AI",
         "thread_id": _get_thread_id("TOPIC_AI_THREAD_ID"),
-        "min_score": 15,
+        "min_score": 10,
         "rss_feeds": {
             "TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
             "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
@@ -211,7 +211,7 @@ PROFILES = [
         "key": "crypto",
         "label": "\U0001F4B0 Crypto",
         "thread_id": _get_thread_id("TOPIC_CRYPTO_THREAD_ID"),
-        "min_score": 15,
+        "min_score": 10,
         "rss_feeds": {
             "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
             "Cointelegraph": "https://cointelegraph.com/rss",
@@ -234,7 +234,7 @@ PROFILES = [
         "key": "viral_id",
         "label": "\U0001F1EE\U0001F1E9 Viral Indonesia",
         "thread_id": _get_thread_id("TOPIC_VIRAL_THREAD_ID"),
-        "min_score": 35,
+        "min_score": 15,
         "rss_feeds": {
             "Tribunnews": "https://www.tribunnews.com/rss",
             "Liputan6 News": "https://feed.liputan6.com/rss/news",
@@ -248,7 +248,7 @@ PROFILES = [
         "key": "entertainment_id",
         "label": "\U0001F3AC Entertainment Indonesia",
         "thread_id": _get_thread_id("TOPIC_ENTERTAINMENT_THREAD_ID"),
-        "min_score": 45,
+        "min_score": 20,
         "rss_feeds": {
             "KapanLagi": "https://www.kapanlagi.com/feed",
             "Liputan6 Showbiz": "https://feed.liputan6.com/rss/showbiz",
@@ -261,7 +261,7 @@ PROFILES = [
         "key": "viral_global",
         "label": "\U0001F30D Viral Global",
         "thread_id": _get_thread_id("TOPIC_VIRAL_GLOBAL_THREAD_ID"),
-        "min_score": 40,
+        "min_score": 20,
         "rss_feeds": {
             "BBC News": "https://feeds.bbci.co.uk/news/rss.xml",
             "Reuters World": "https://www.reutersagency.com/feed/?best-topics=world&post_type=best",
@@ -286,7 +286,7 @@ PROFILES = [
         "key": "ai_tools",
         "label": "\U0001F6E0\uFE0F AI Tools & Tutorial",
         "thread_id": _get_thread_id("TOPIC_AI_TOOLS_THREAD_ID"),
-        "min_score": 15,
+        "min_score": 10,
         "rss_feeds": {
             "Hacker News (AI/tools)": "https://hnrss.org/newest?q=AI+OR+open-source+OR+self-hosted&count=20",
             "GitHub Trending (daily)": "https://rsshub.app/github/trending/daily",
@@ -517,9 +517,6 @@ def passes_content_filter(profile, item):
     text = f"{item['title']} {item.get('preview', '')}"
     normalized = normalize_text(text)
 
-    if contains_phrase(normalized, LOW_VALUE_PATTERNS):
-        return False, "low-value/rutin"
-
     required = TOPIC_RELEVANCE.get(key)
     if required and not contains_phrase(normalized, required):
         return False, "tidak relevan dengan topic"
@@ -532,13 +529,6 @@ def passes_content_filter(profile, item):
         )
         if not tool_signal:
             return False, "bukan tools/tutorial"
-
-    # Topic viral dan entertainment harus punya sinyal kuat, bukan berita rutin.
-    if key in {"viral_id", "entertainment_id", "viral_global"}:
-        if not contains_phrase(normalized, profile.get("extra_keywords") or set()) and not contains_phrase(
-            normalized, BIG_UPDATE_KEYWORDS | CONTROVERSY_KEYWORDS
-        ):
-            return False, "tidak punya angle konten kuat"
 
     return True, ""
 
@@ -584,7 +574,7 @@ def compute_viral_scores(items, extra_keywords=None):
         if source == "X/Twitter":
             score += min((raw or 0) / 20, 40)
         else:
-            score += 5
+            score += 10
 
         score += keyword_boost(item["title"] + " " + item.get("preview", ""), extra_keywords)
 
