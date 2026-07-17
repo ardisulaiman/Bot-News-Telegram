@@ -102,6 +102,33 @@ GLOBAL_VIRAL_KEYWORDS = {
     "jadi sorotan", "curi perhatian", "mendadak viral",
 }
 
+# Buat topic "AI Tools & Tutorial" — nyakup SEMUA tools & model AI (open-source
+# maupun berbayar), rilis baru, sampai tutorial/cara pakainya. Gak dibatesin
+# ke 1 angle doang (misal "alternatif tools berbayar" itu cuma salah satu jenis).
+AI_TOOLS_KEYWORDS = {
+    # rilis/model/tools baru (segala jenis, open-source atau bukan)
+    "new ai tool", "new model", "new ai model", "ai tool launch", "launches ai",
+    "introduces ai", "ai app", "ai platform", "ai assistant", "new feature",
+    "update", "released", "now available", "beta", "public release",
+    # pola "alternatif ke tools berbayar" — tetep relevan tapi bukan satu2nya
+    "open source alternative", "free alternative to", "alternative to",
+    "vs chatgpt", "vs midjourney", "vs runway", "vs notion", "cheaper than",
+    "save money on ai", "ditch your subscription", "cancel your subscription",
+    # self-host / local / open-source
+    "open source", "open-source", "self-hosted", "self hosted", "self-host",
+    "run locally", "local model", "no subscription", "unlimited generation",
+    # tutorial/how-to angle (semua tools, bukan cuma open-source)
+    "how to use", "how to set up", "tutorial", "step by step", "walkthrough",
+    "setup guide", "install guide", "workflow", "automation workflow",
+    "tips and tricks", "best practices", "prompt guide",
+    # versi Indonesia — lebih umum
+    "tools ai baru", "model ai baru", "rilis ai", "fitur baru ai",
+    "gratis", "tanpa langganan", "alternatif gratis", "alternatif open-source",
+    "hemat biaya", "gak usah bayar", "gausah bayar", "cara pakai",
+    "cara install", "cara setup", "tutorial lengkap", "panduan lengkap",
+    "workflow otomatis", "tips ai", "trik ai",
+}
+
 
 def keyword_boost(text, extra_keywords=None):
     lower = text.lower()
@@ -125,7 +152,7 @@ PROFILES = [
         "key": "ai",
         "label": "\U0001F916 AI",
         "thread_id": _get_thread_id("TOPIC_AI_THREAD_ID"),
-        "min_score": MIN_SCORE_TO_SEND_DEFAULT,
+        "min_score": 15,
         "rss_feeds": {
             "TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
             "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
@@ -148,7 +175,7 @@ PROFILES = [
         "key": "crypto",
         "label": "\U0001F4B0 Crypto",
         "thread_id": _get_thread_id("TOPIC_CRYPTO_THREAD_ID"),
-        "min_score": MIN_SCORE_TO_SEND_DEFAULT,
+        "min_score": 15,
         "rss_feeds": {
             "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
             "Cointelegraph": "https://cointelegraph.com/rss",
@@ -171,7 +198,7 @@ PROFILES = [
         "key": "viral_id",
         "label": "\U0001F1EE\U0001F1E9 Viral Indonesia",
         "thread_id": _get_thread_id("TOPIC_VIRAL_THREAD_ID"),
-        "min_score": 20,
+        "min_score": 35,
         "rss_feeds": {
             "Tribunnews": "https://www.tribunnews.com/rss",
             "Liputan6 News": "https://feed.liputan6.com/rss/news",
@@ -185,7 +212,7 @@ PROFILES = [
         "key": "entertainment_id",
         "label": "\U0001F3AC Entertainment Indonesia",
         "thread_id": _get_thread_id("TOPIC_ENTERTAINMENT_THREAD_ID"),
-        "min_score": 20,
+        "min_score": 35,
         "rss_feeds": {
             "KapanLagi": "https://www.kapanlagi.com/feed",
             "Liputan6 Showbiz": "https://feed.liputan6.com/rss/showbiz",
@@ -198,7 +225,7 @@ PROFILES = [
         "key": "viral_global",
         "label": "\U0001F30D Viral Global",
         "thread_id": _get_thread_id("TOPIC_VIRAL_GLOBAL_THREAD_ID"),
-        "min_score": 25,
+        "min_score": 40,
         "rss_feeds": {
             "BBC News": "https://feeds.bbci.co.uk/news/rss.xml",
             "Reuters World": "https://www.reutersagency.com/feed/?best-topics=world&post_type=best",
@@ -218,6 +245,31 @@ PROFILES = [
             "(viral OR trending) min_faves:1000 lang:en",
         ],
         "extra_keywords": GLOBAL_VIRAL_KEYWORDS,
+    },
+    {
+        "key": "ai_tools",
+        "label": "\U0001F6E0\uFE0F AI Tools & Tutorial",
+        "thread_id": _get_thread_id("TOPIC_AI_TOOLS_THREAD_ID"),
+        "min_score": 15,
+        "rss_feeds": {
+            "Hacker News (AI/tools)": "https://hnrss.org/newest?q=AI+OR+open-source+OR+self-hosted&count=20",
+            "GitHub Trending (daily)": "https://rsshub.app/github/trending/daily",
+            "Reddit r/selfhosted": "https://www.reddit.com/r/selfhosted/.rss",
+            "Reddit r/LocalLLaMA": "https://www.reddit.com/r/LocalLLaMA/.rss",
+            "Reddit r/opensource": "https://www.reddit.com/r/opensource/.rss",
+            "Reddit r/artificial": "https://www.reddit.com/r/artificial/.rss",
+            "There's An AI For That": "https://www.theresanaiforthat.com/feed/",
+            "Google News (AI Tools - luas)": (
+                "https://news.google.com/rss/search?q=%22AI+tool%22+OR+"
+                "%22new+AI+model%22+OR+%22AI+app%22&hl=en-US&gl=US&ceid=US:en"
+            ),
+            "Google News (AI Tools Open Source)": (
+                "https://news.google.com/rss/search?q=%22open+source%22+AI+tool+"
+                "OR+%22free+alternative%22+AI&hl=en-US&gl=US&ceid=US:en"
+            ),
+        },
+        "twitter_queries": [],
+        "extra_keywords": AI_TOOLS_KEYWORDS,
     },
 ]
 
