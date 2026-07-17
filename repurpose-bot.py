@@ -21,6 +21,8 @@ import time
 import logging
 import re
 import unicodedata
+import threading
+import html
 import requests
 import feedparser
 from datetime import datetime, timezone, timedelta
@@ -43,7 +45,10 @@ MIN_SCORE_TO_SEND_DEFAULT = int(os.getenv("MIN_SCORE_TO_SEND", 30))
 SEEN_FILE = "seen_items.json"
 SIGNATURES_FILE = "sent_signatures.json"
 MAX_ITEMS_PER_TOPIC = int(os.getenv("MAX_ITEMS_PER_TOPIC", 3))
+AI_TOOLS_MAX_ITEMS = int(os.getenv("AI_TOOLS_MAX_ITEMS", 10))
 DEDUPE_HOURS = int(os.getenv("DEDUPE_HOURS", 72))
+TRANSLATE_SOURCE_LANG = os.getenv("TRANSLATE_SOURCE_LANG", "en")
+TELEGRAM_OFFSET_FILE = "telegram_update_offset.json"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -94,6 +99,12 @@ LOW_VALUE_PATTERNS = {
     "price prediction", "price analysis", "technical analysis", "daily horoscope",
     "weekly roundup", "morning brief", "live updates", "what we know",
     "watch now", "photos", "photo gallery", "full list", "recap",
+}
+
+NOT_PUBLIC_PATTERNS = {
+    "waitlist", "invite only", "closed beta", "private beta", "limited preview",
+    "selected users", "select users", "not yet available", "coming soon",
+    "early access applicants", "internal testing", "plans to launch",
 }
 
 BIG_UPDATE_KEYWORDS = {
@@ -295,6 +306,7 @@ PROFILES = [
         },
         "twitter_queries": [],
         "extra_keywords": AI_TOOLS_KEYWORDS,
+        "max_items": AI_TOOLS_MAX_ITEMS,
     },
 ]
 
@@ -513,6 +525,8 @@ def passes_content_filter(profile, item):
         return False, "tidak relevan dengan topic"
 
     if key == "ai_tools":
+        if contains_phrase(normalized, NOT_PUBLIC_PATTERNS):
+            return False, "belum tersedia untuk publik"
         tool_signal = contains_phrase(normalized, AI_TOOLS_KEYWORDS) or contains_phrase(
             normalized, {"github", "tool", "app", "tutorial", "workflow", "api", "open source", "self hosted"}
         )
@@ -527,6 +541,35 @@ def passes_content_filter(profile, item):
             return False, "tidak punya angle konten kuat"
 
     return True, ""
+
+
+def build_ai_tools_content_idea(item):
+    """Bikin arahan konten sederhana tanpa AI/generative API."""
+    title = item["title"].strip()
+    text = f"{title} {item.get('preview', '')}"
+
+    if contains_phrase(text, {"open source", "open-source", "self hosted", "self-hosted", "free alternative"}):
+        angle = "Alternatif gratis/open-source untuk memangkas biaya subscription"
+        hook = f"Gak harus bayar mahal: coba alternatif dari {title}"
+        points = "fungsi utama, tool berbayar yang bisa diganti, cara mulai, dan biaya server/API"
+    elif contains_phrase(text, {"how to", "tutorial", "guide", "workflow", "step by step", "automation"}):
+        angle = "Tutorial praktis yang bisa langsung diikuti"
+        hook = f"Cara pakai {title} untuk workflow kerja yang lebih cepat"
+        points = "masalah awal, langkah setup, contoh penggunaan, hasil, dan batasannya"
+    elif contains_phrase(text, {"vs", "alternative to", "comparison", "cheaper than"}):
+        angle = "Perbandingan tool untuk membantu audiens memilih"
+        hook = f"Sebelum langganan, bandingkan dulu: {title}"
+        points = "fitur, harga, kemudahan, kualitas hasil, privasi, dan target pengguna"
+    elif contains_phrase(text, {"launch", "launches", "released", "release", "new feature", "update", "now available"}):
+        angle = "Update tool baru dan dampaknya ke workflow pengguna"
+        hook = f"Update ini layak dicoba? {title}"
+        points = "apa yang berubah, siapa yang terbantu, contoh use case, akses, harga, dan kekurangan"
+    else:
+        angle = "Eksplorasi tool dan use case nyata"
+        hook = f"Tool AI ini bisa dipakai buat apa? {title}"
+        points = "fungsi utama, target pengguna, demo singkat, hasil nyata, harga, dan alternatif"
+
+    return {"angle": angle, "hook": hook, "points": points}
 
 
 def compute_viral_scores(items, extra_keywords=None):
@@ -606,6 +649,138 @@ def send_telegram_message(chat_id, text, thread_id=None):
         return False
 
 
+# ============================================================
+# PERINTAH /tr: TERJEMAHKAN PESAN YANG DI-REPLY
+# ============================================================
+
+def load_telegram_offset():
+    try:
+        with open(TELEGRAM_OFFSET_FILE, "r") as f:
+            return int(json.load(f).get("offset", 0))
+    except Exception:
+        return 0
+
+
+def save_telegram_offset(offset):
+    try:
+        with open(TELEGRAM_OFFSET_FILE, "w") as f:
+            json.dump({"offset": offset}, f)
+    except Exception as e:
+        log.warning(f"Gagal simpan Telegram update offset: {e}")
+
+
+def split_translation_chunks(text, max_chars=350):
+    words = (text or "").split()
+    chunks, current = [], []
+    for word in words:
+        if current and len(" ".join(current + [word])) > max_chars:
+            chunks.append(" ".join(current))
+            current = [word]
+        else:
+            current.append(word)
+    if current:
+        chunks.append(" ".join(current))
+    return chunks
+
+
+def translate_to_indonesian(text):
+    """Terjemahan gratis via MyMemory; URL dipertahankan apa adanya."""
+    if not text or not text.strip():
+        return ""
+
+    urls = re.findall(r"https?://\S+", text)
+    protected = text
+    for index, url in enumerate(urls):
+        protected = protected.replace(url, f" URLTOKEN{index} ")
+
+    translated_chunks = []
+    for chunk in split_translation_chunks(protected):
+        resp = requests.get(
+            "https://api.mymemory.translated.net/get",
+            params={"q": chunk, "langpair": f"{TRANSLATE_SOURCE_LANG}|id"},
+            timeout=20,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        translated = data.get("responseData", {}).get("translatedText")
+        if not translated or int(data.get("responseStatus", 200)) >= 400:
+            raise RuntimeError(data.get("responseDetails") or "Terjemahan kosong")
+        translated_chunks.append(translated)
+
+    result = "\n\n".join(translated_chunks)
+    for index, url in enumerate(urls):
+        result = re.sub(rf"URLTOKEN\s*{index}", url, result, flags=re.IGNORECASE)
+    return result
+
+
+def send_translate_reply(message, text):
+    chat_id = message.get("chat", {}).get("id")
+    if not chat_id:
+        return
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "reply_to_message_id": message.get("message_id"),
+        "allow_sending_without_reply": True,
+    }
+    thread_id = message.get("message_thread_id")
+    if thread_id is not None:
+        payload["message_thread_id"] = thread_id
+    resp = requests.post(
+        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+        data=payload,
+        timeout=15,
+    )
+    resp.raise_for_status()
+
+
+def handle_translate_command(message):
+    command = (message.get("text") or "").strip().split()[0].lower()
+    if command.split("@")[0] != "/tr":
+        return
+
+    replied = message.get("reply_to_message")
+    if not replied:
+        send_translate_reply(message, "Reply pesan yang mau diterjemahkan, lalu ketik <b>/tr</b>.")
+        return
+
+    original = replied.get("text") or replied.get("caption") or ""
+    if not original.strip():
+        send_translate_reply(message, "Pesan tersebut tidak memiliki teks yang bisa diterjemahkan.")
+        return
+
+    try:
+        translated = translate_to_indonesian(original[:3500])
+        safe_text = html.escape(translated)
+        send_translate_reply(message, f"🇮🇩 <b>Terjemahan:</b>\n\n{safe_text}"[:4096])
+    except Exception as e:
+        log.warning(f"Gagal menerjemahkan pesan: {e}")
+        send_translate_reply(message, "Terjemahan sedang gagal. Coba lagi beberapa saat nanti.")
+
+
+def telegram_command_loop():
+    offset = load_telegram_offset()
+    log.info("Listener perintah /tr aktif untuk semua Topic.")
+    while True:
+        try:
+            resp = requests.get(
+                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates",
+                params={"offset": offset, "timeout": 25, "allowed_updates": json.dumps(["message"])},
+                timeout=35,
+            )
+            resp.raise_for_status()
+            for update in resp.json().get("result", []):
+                offset = int(update["update_id"]) + 1
+                message = update.get("message")
+                if message:
+                    handle_translate_command(message)
+                save_telegram_offset(offset)
+        except Exception as e:
+            log.warning(f"Listener /tr error: {e}")
+            time.sleep(5)
+
+
 def format_message(item):
     score_line = f"\u2b06\ufe0f Score: {item['score']}\n" if item.get("score") else ""
     tier = get_tier_label(item.get("viral_score", 0))
@@ -613,6 +788,14 @@ def format_message(item):
     cross_line = f"\U0001F4E1 Juga muncul di: {', '.join(others)}\n" if others else ""
     preview = item.get("preview", "")
     preview_line = f"\U0001F4AC {preview}...\n" if preview else ""
+    idea = item.get("content_idea")
+    idea_block = ""
+    if idea:
+        idea_block = (
+            f"\n\U0001F3AF <b>Angle:</b> {idea['angle']}\n"
+            f"\U0001F4A1 <b>Ide judul:</b> {idea['hook']}\n"
+            f"\U0001F4DD <b>Bahan bahasan:</b> {idea['points']}\n"
+        )
     waktu = datetime.now().strftime("%H:%M")
     return (
         f"{tier} (Skor: {item.get('viral_score', 0)}/100)\n"
@@ -621,6 +804,7 @@ def format_message(item):
         f"\U0001F4F0 Sumber: {item['source']}\n"
         f"{score_line}"
         f"{cross_line}"
+        f"{idea_block}"
         f"\U0001F517 {item['link']}\n"
         f"\u23f0 Terdeteksi: {waktu}"
     )
@@ -657,6 +841,8 @@ def run_profile(profile, seen, signatures):
     for item in candidates:
         passed, reason = passes_content_filter(profile, item)
         if passed:
+            if key == "ai_tools":
+                item["content_idea"] = build_ai_tools_content_idea(item)
             new_items.append(item)
         else:
             rejected_content += 1
@@ -692,7 +878,7 @@ def run_profile(profile, seen, signatures):
     if skipped_dupe:
         log.info(f"[{label}] {skipped_dupe} item di-skip karena mirip/duplikat.")
 
-    final_items = final_items[:MAX_ITEMS_PER_TOPIC]
+    final_items = final_items[:profile.get("max_items", MAX_ITEMS_PER_TOPIC)]
 
     for item in final_items:
         success = send_telegram_message(TELEGRAM_CHAT_ID, format_message(item), thread_id=thread_id)
@@ -737,6 +923,9 @@ def main():
             "Isi minimal 1 (TOPIC_AI_THREAD_ID, TOPIC_CRYPTO_THREAD_ID, dst)."
         )
         return
+
+    command_thread = threading.Thread(target=telegram_command_loop, daemon=True)
+    command_thread.start()
 
     log.info(f"Bot mulai jalan... Topik aktif: {', '.join(active_profiles)}")
 
