@@ -98,16 +98,3 @@ LOW_VALUE_PATTERNS = {
         "twitter_queries": [],
         "extra_keywords": AI_TOOLS_KEYWORDS,
         "max_items": AI_TOOLS_MAX_ITEMS,
-        "extra_keywords": INDO_VIRAL_KEYWORDS | CONTROVERSY_KEYWORDS,
-        "max_items": POLITICS_MAX_ITEMS,
-    },
-]
-
-    if not active_profiles:
-        log.error(
-            "Gak ada satupun THREAD_ID topik yang diisi di .env! "
-            "Isi minimal 1 (TOPIC_AI_THREAD_ID, TOPIC_CRYPTO_THREAD_ID, dst)."
-            "Isi minimal 1 (TOPIC_AI_THREAD_ID, TOPIC_CRYPTO_THREAD_ID, "
-            "TOPIC_POLITICS_THREAD_ID, dst)."
-        )
-        return
