@@ -297,7 +297,8 @@ PROFILES = [
         "label": "\U0001F3DB\uFE0F Politik Indonesia",
         # Pakai variable baru jika ada; fallback ke thread AI Tools lama.
         "thread_id": _get_thread_id("TOPIC_POLITICS_THREAD_ID") or _get_thread_id("TOPIC_AI_TOOLS_THREAD_ID"),
-        "min_score": 10,
+        "min_score": 35,
+        "max_age_hours": 2,
         "rss_feeds": {
             "ANTARA Politik": "https://www.antaranews.com/rss/politik.xml",
             "CNN Indonesia Nasional": "https://www.cnnindonesia.com/nasional/rss",
@@ -425,14 +426,14 @@ def parse_twitter_date(created_at_str):
 # AMBIL BERITA DARI RSS
 # ============================================================
 
-def fetch_rss_items(rss_feeds):
+def fetch_rss_items(rss_feeds, max_age_hours=MAX_AGE_HOURS):
     items = []
     for source_name, url in rss_feeds.items():
         try:
             feed = feedparser.parse(url)
             for entry in feed.entries[:10]:
                 published = entry.get("published_parsed") or entry.get("updated_parsed")
-                if not is_recent_enough(published):
+                if not is_recent_enough(published, max_hours=max_age_hours):
                     continue
                 preview = clean_html(entry.get("summary", ""))[:200]
                 items.append({
@@ -813,6 +814,7 @@ def format_message(item):
             f"\U0001F4DD <b>Bahan bahasan:</b> {idea['points']}\n"
         )
     waktu = datetime.now().strftime("%H:%M")
+    source_link = html.escape(item.get("link", ""), quote=True)
     return (
         f"{tier} (Skor: {item.get('viral_score', 0)}/100)\n"
         f"\U0001F4CC <b>{item['title']}</b>\n"
@@ -821,7 +823,7 @@ def format_message(item):
         f"{score_line}"
         f"{cross_line}"
         f"{idea_block}"
-        f"\U0001F517 {item['link']}\n"
+        f'<a href="{source_link}">\U0001F517 Buka sumber</a>\n'
         f"\u23f0 Terdeteksi: {waktu}"
     )
 
@@ -842,7 +844,10 @@ def run_profile(profile, seen, signatures):
         log.warning(f"[{label}] Thread ID topic belum diisi di .env, skip topik ini.")
         return
 
-    all_items = fetch_rss_items(profile["rss_feeds"]) + fetch_twitter_items(profile["twitter_queries"])
+    all_items = fetch_rss_items(
+        profile["rss_feeds"],
+        max_age_hours=profile.get("max_age_hours", MAX_AGE_HOURS),
+    ) + fetch_twitter_items(profile["twitter_queries"])
     all_items = compute_viral_scores(all_items, profile.get("extra_keywords"))
 
     for item in all_items:
