@@ -98,11 +98,21 @@ TOPIC_RELEVANCE = {
     },
     "politics_id": {
         "politik", "pemerintah", "presiden", "wakil presiden", "menteri",
+        "prabowo", "gibran", "mbg", "makan bergizi gratis", "bgn",
+        "badan gizi nasional", "kabinet merah putih", "danantara",
         "dpr", "mpr", "dpd", "partai", "pemilu", "pilkada", "kpu",
         "bawaslu", "kabinet", "ruu", "undang undang", "kebijakan",
         "koalisi", "oposisi", "legislatif", "eksekutif", "mahkamah konstitusi",
         "korupsi", "kpk", "demonstrasi", "istana", "gubernur", "kepala daerah",
     },
+}
+
+POLITICS_PRIORITY_KEYWORDS = {
+    "prabowo", "gibran", "mbg", "makan bergizi gratis", "bgn",
+    "badan gizi nasional", "kabinet merah putih", "danantara", "reshuffle",
+    "polemik", "kontroversi", "konflik", "kisruh", "bantah", "kritik",
+    "desak", "demo", "demonstrasi", "korupsi", "kpk", "skandal",
+    "nepotisme", "ditangkap", "diciduk", "diperiksa", "mundur",
 }
 
 LOW_VALUE_PATTERNS = {
@@ -298,7 +308,7 @@ PROFILES = [
         # Pakai variable baru jika ada; fallback ke thread AI Tools lama.
         "thread_id": _get_thread_id("TOPIC_POLITICS_THREAD_ID") or _get_thread_id("TOPIC_AI_TOOLS_THREAD_ID"),
         "min_score": 35,
-        "max_age_hours": 2,
+        "max_age_hours": 1,
         "rss_feeds": {
             "ANTARA Politik": "https://www.antaranews.com/rss/politik.xml",
             "CNN Indonesia Nasional": "https://www.cnnindonesia.com/nasional/rss",
@@ -332,7 +342,7 @@ PROFILES = [
             ),
         },
         "twitter_queries": [],
-        "extra_keywords": INDO_VIRAL_KEYWORDS | CONTROVERSY_KEYWORDS,
+        "extra_keywords": POLITICS_PRIORITY_KEYWORDS | INDO_VIRAL_KEYWORDS | CONTROVERSY_KEYWORDS,
         "max_items": POLITICS_MAX_ITEMS,
     },
 ]
@@ -849,6 +859,12 @@ def run_profile(profile, seen, signatures):
         max_age_hours=profile.get("max_age_hours", MAX_AGE_HOURS),
     ) + fetch_twitter_items(profile["twitter_queries"])
     all_items = compute_viral_scores(all_items, profile.get("extra_keywords"))
+
+    if key == "politics_id":
+        for item in all_items:
+            text = f"{item['title']} {item.get('preview', '')}"
+            if contains_phrase(text, POLITICS_PRIORITY_KEYWORDS):
+                item["viral_score"] = round(min(item["viral_score"] + 20, 100), 1)
 
     for item in all_items:
         item["_uid"] = f"{key}:{item['id']}"
