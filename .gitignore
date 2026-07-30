@@ -1,0 +1,22 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Runtime state
+seen_items.json
+sent_signatures.json
+telegram_update_offset.json
+
+# Logs and local tooling
+*.log
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
