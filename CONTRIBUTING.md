@@ -1,8 +1,8 @@
-# Panduan kontribusi
+# Contributing
 
-Terima kasih sudah membantu mengembangkan Bot News Telegram.
+Thank you for helping improve Bot News Telegram.
 
-## Menyiapkan lingkungan
+## Set up the project
 
 ```powershell
 python -m venv .venv
@@ -11,39 +11,38 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-Isi konfigurasi pengujian sendiri dan jangan pernah membagikan token atau API
-key.
+Use your own test configuration and never share tokens or API keys.
 
-## Prinsip perubahan
+## Contribution guidelines
 
-- Pertahankan sumber asli pada judul, preview, dan link berita.
-- Pastikan filter baru tidak mencampurkan berita antar-topik.
-- Hindari perubahan ambang skor tanpa menjelaskan alasannya.
-- Jangan menghapus mekanisme deduplikasi tanpa pengganti yang setara.
-- Perbarui README jika konfigurasi atau cara penggunaan berubah.
-- Jangan commit `.env` atau file status runtime.
+- Preserve the original source in story titles, previews, and links.
+- Make sure new filters do not mix stories between topics.
+- Explain why a scoring threshold needs to change.
+- Do not remove deduplication without an equivalent replacement.
+- Update the README when configuration or user-facing behavior changes.
+- Never commit `.env` or runtime state files.
 
-## Pemeriksaan sebelum commit
+## Checks before committing
 
-Periksa sintaks:
+Check the Python syntax:
 
 ```powershell
 python -m py_compile repurpose-bot.py
 ```
 
-Jalankan satu siklus pengujian:
+Run a single test cycle:
 
 ```powershell
 $env:TEST_MODE="1"
 python repurpose-bot.py
 ```
 
-Tinjau log untuk memastikan topik yang aktif, jumlah kandidat, hasil filter,
-duplikasi, dan status pengiriman sesuai harapan.
+Review the logs for active topics, candidate counts, filter results, duplicate
+detection, and delivery status.
 
-## Pesan commit
+## Commit messages
 
-Gunakan pesan singkat dan jelas, misalnya:
+Use short and descriptive messages, for example:
 
 - `docs: improve setup guide`
 - `fix: prevent duplicate politics stories`

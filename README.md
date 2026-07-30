@@ -1,61 +1,67 @@
 # Bot News Telegram
 
-Bot kurasi berita multi-topik untuk Telegram. Aplikasi ini mengambil berita dari RSS dan X, menilai relevansi serta tingkat viralnya, menyaring berita yang mirip, lalu mengirim hasil terbaik ke Topic Telegram yang sesuai.
+A multi-topic news curation bot for Telegram. It collects stories from RSS
+feeds and X, evaluates relevance and virality, filters similar stories, and
+sends the strongest results to the appropriate Telegram Topics.
 
-Bot berjalan tanpa AI generatif. Judul dan ringkasan tetap berasal dari sumber asli sehingga hasil kurasi dapat dibaca, diverifikasi, dan ditulis ulang secara manual sebelum dipublikasikan ke platform lain.
+The bot does not use generative AI. Titles and previews remain sourced from the
+original publishers, making each story easy to review, verify, and rewrite
+manually before publishing it elsewhere.
 
-## Fitur utama
+## Key features
 
-- Kurasi berita untuk AI, crypto, viral Indonesia, entertainment Indonesia, viral global, dan politik Indonesia.
-- Sumber RSS berbeda untuk setiap topik.
-- Dukungan sumber X melalui TwitterAPI.io.
-- Skor viral berdasarkan kata kunci, engagement, dan kemunculan lintas sumber.
-- Filter relevansi dan batas umur berita.
-- Pencegahan duplikasi berdasarkan token judul dan entitas penting.
-- Pengiriman ke Topic Telegram melalui `message_thread_id`.
-- Perintah `/tr` untuk menerjemahkan pesan yang dibalas ke bahasa Indonesia.
-- Mode pengujian satu kali sebelum bot dijalankan terus-menerus.
+- Curates AI, crypto, Indonesian viral news, Indonesian entertainment, global
+  viral news, and Indonesian politics.
+- Uses a dedicated set of RSS feeds for each topic.
+- Supports X as an optional source through TwitterAPI.io.
+- Calculates viral scores from keywords, engagement, and cross-source coverage.
+- Filters stories by topic relevance and publication age.
+- Prevents duplicates using title tokens and important entities.
+- Sends messages to Telegram Topics using `message_thread_id`.
+- Provides a `/tr` command to translate replied messages into Indonesian.
+- Includes a single-run test mode for safe validation.
 
-## Cara kerja
+## How it works
 
 ```text
-RSS + TwitterAPI.io
-        ↓
-  Filter waktu dan topik
-        ↓
-    Penilaian viral
-        ↓
-  Pemeriksaan duplikasi
-        ↓
- Topic Telegram terkait
+RSS feeds + TwitterAPI.io
+            ↓
+    Time and topic filters
+            ↓
+       Viral scoring
+            ↓
+      Duplicate checks
+            ↓
+  Matching Telegram Topic
 ```
 
-Setiap berita mendapatkan skor dari sinyal berikut:
+Each story receives a score based on:
 
-1. engagement dari X atau skor dasar untuk RSS;
-2. kata kunci update besar, kontroversi, dan sinyal khusus topik;
-3. kemunculan berita serupa di beberapa sumber;
-4. filter tambahan untuk memastikan konten sesuai dengan kategori.
+1. X engagement or a base score for RSS sources;
+2. major-update, controversy, and topic-specific keywords;
+3. similar coverage from multiple publishers;
+4. additional content filters for the selected category.
 
-Berita yang sudah dikirim disimpan secara lokal agar tidak terkirim kembali pada siklus berikutnya.
+Previously sent stories are stored locally so they are not sent again during
+future cycles.
 
-## Persyaratan
+## Requirements
 
-- Python 3.11 atau lebih baru
-- Bot Telegram dari `@BotFather`
-- Grup Telegram dengan fitur Topics
-- API key TwitterAPI.io jika sumber X ingin digunakan
+- Python 3.11 or newer
+- A Telegram bot created with `@BotFather`
+- A Telegram group with Topics enabled
+- A TwitterAPI.io API key if X sourcing is required
 
-## Instalasi
+## Installation
 
-Clone repository dan masuk ke folder proyek:
+Clone the repository:
 
 ```powershell
 git clone https://github.com/ardisulaiman/Bot-News-Telegram.git
 cd Bot-News-Telegram
 ```
 
-Buat virtual environment dan instal dependensi:
+Create a virtual environment and install the dependencies:
 
 ```powershell
 python -m venv .venv
@@ -63,15 +69,15 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Salin konfigurasi contoh:
+Copy the example configuration:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-## Konfigurasi
+## Configuration
 
-Isi file `.env`:
+Open `.env` and provide the required values:
 
 ```dotenv
 TELEGRAM_BOT_TOKEN=
@@ -94,85 +100,99 @@ TRANSLATE_SOURCE_LANG=en
 TEST_MODE=0
 ```
 
-### Mendapatkan Telegram Chat ID
+### Find the Telegram chat ID
 
-1. Tambahkan bot ke grup Telegram.
-2. Jadikan bot admin agar dapat mengirim pesan ke Topic.
-3. Kirim satu pesan ke grup.
-4. Buka `https://api.telegram.org/bot<TOKEN>/getUpdates`.
-5. Ambil nilai `message.chat.id` dan masukkan sebagai `TELEGRAM_CHAT_ID`.
+1. Add the bot to your Telegram group.
+2. Make it an administrator so it can send messages to Topics.
+3. Send a message to the group.
+4. Open `https://api.telegram.org/bot<TOKEN>/getUpdates`.
+5. Copy `message.chat.id` into `TELEGRAM_CHAT_ID`.
 
-### Mendapatkan Topic Thread ID
+### Find a Topic thread ID
 
-1. Aktifkan Topics pada grup Telegram.
-2. Buat Topic untuk kategori yang ingin digunakan.
-3. Kirim pesan ke Topic tersebut.
-4. Buka endpoint `getUpdates`.
-5. Ambil nilai `message_thread_id` dan masukkan ke variabel topik terkait.
+1. Enable Topics in the Telegram group.
+2. Create a Topic for the category.
+3. Send a message inside that Topic.
+4. Open the `getUpdates` endpoint.
+5. Copy `message_thread_id` into the matching environment variable.
 
-Topik dengan thread ID kosong akan dilewati, jadi tidak semua kategori wajib diaktifkan.
+Topics with an empty thread ID are skipped, so you only need to configure the
+categories you want to use.
 
-## Menjalankan bot
+## Running the bot
 
-Uji satu siklus terlebih dahulu:
+Run one test cycle first:
 
 ```powershell
 $env:TEST_MODE="1"
 python repurpose-bot.py
 ```
 
-Jika hasilnya sudah sesuai, jalankan normal:
+When the output looks correct, start the regular loop:
 
 ```powershell
 python repurpose-bot.py
 ```
 
-Bot akan memeriksa sumber, mengirim berita yang lolos kurasi, menunggu sesuai `CHECK_INTERVAL_SECONDS`, lalu mengulangi proses.
+The bot checks its sources, sends stories that pass curation, waits for
+`CHECK_INTERVAL_SECONDS`, and repeats.
 
-## Perintah Telegram
+## Telegram command
 
-Balas pesan berbahasa Inggris di grup, lalu kirim:
+Reply to an English message in the group and send:
 
 ```text
 /tr
 ```
 
-Bot akan menerjemahkan teks atau caption ke bahasa Indonesia melalui layanan MyMemory. URL dalam pesan tetap dipertahankan.
+The bot translates the text or caption into Indonesian through MyMemory while
+preserving URLs.
 
-## File runtime
+## Runtime files
 
-File berikut dibuat otomatis dan tidak perlu di-commit:
+The following files are created automatically and should not be committed:
 
-- `seen_items.json`: ID berita yang sudah diproses;
-- `sent_signatures.json`: sidik jari judul untuk mencegah duplikasi;
-- `telegram_update_offset.json`: posisi terakhir listener perintah Telegram.
+- `seen_items.json`: IDs of processed stories;
+- `sent_signatures.json`: title fingerprints used for deduplication;
+- `telegram_update_offset.json`: the last Telegram update processed.
 
 ## Deployment
 
-Repository menyertakan `railpack.toml` untuk deployment yang sudah ada. Di platform hosting, isi variabel environment yang sama dengan `.env` dan jalankan `python repurpose-bot.py` sebagai proses utama. Jangan mengunggah file `.env`.
+The repository includes the existing `railpack.toml` deployment configuration.
+On your hosting platform, configure the same environment variables used in
+`.env` and run `python repurpose-bot.py` as the main process. Never upload the
+local `.env` file.
 
 ## Troubleshooting
 
-### Bot tidak mengirim berita
+### The bot does not send stories
 
-Periksa token, chat ID, thread ID, umur maksimum berita, dan skor minimum setiap profil. Lihat log terminal untuk mengetahui topik yang dilewati.
+Check the bot token, chat ID, thread IDs, story age limit, and minimum score for
+each profile. The terminal logs identify skipped topics and rejected stories.
 
-### Berita yang sama muncul kembali
+### Similar stories appear again
 
-Pastikan file runtime dapat ditulis dan tidak selalu terhapus ketika service restart. Pada hosting ephemeral, gunakan storage persisten jika ingin status deduplikasi bertahan.
+Make sure the runtime files remain writable and are not deleted after every
+restart. Use persistent storage when deploying to an ephemeral hosting
+environment.
 
-### Sumber X kosong
+### X returns no stories
 
-Pastikan `TWITTERAPI_KEY` valid. Tanpa key tersebut, sumber RSS tetap berjalan normal.
+Verify that `TWITTERAPI_KEY` is valid. RSS sources continue working when the key
+is not configured.
 
-### Perintah /tr tidak merespons
+### The `/tr` command does not respond
 
-Pastikan hanya satu instance bot yang memakai `getUpdates` dan bot memiliki izin membaca pesan grup.
+Make sure only one bot instance is consuming `getUpdates` and that the bot can
+read messages in the group.
 
-## Keamanan
+## Security
 
-Jangan commit token Telegram, API key, file `.env`, atau data runtime. Jika secret pernah masuk ke GitHub, segera rotasi secret tersebut dan bersihkan dari riwayat Git.
+Never commit Telegram tokens, API keys, `.env`, or runtime data. If a secret is
+ever exposed on GitHub, rotate it immediately and remove it from the Git
+history.
 
-## Catatan
+## Maintenance note
 
-Feed RSS, struktur data X, dan API eksternal dapat berubah. Periksa log secara berkala dan sesuaikan sumber jika ada feed yang berhenti merespons.
+RSS feeds, X data structures, and external APIs may change over time. Review the
+logs regularly and replace sources that stop responding.

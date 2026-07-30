@@ -1,31 +1,31 @@
-# Kebijakan keamanan
+# Security policy
 
-## Kredensial
+## Credentials
 
-Bot menggunakan token Telegram dan dapat menggunakan API key TwitterAPI.io.
-Simpan nilai asli di `.env` atau secret manager platform deployment. Jangan
-menaruhnya di source code, README, issue, log publik, atau screenshot.
+The bot uses a Telegram token and can optionally use a TwitterAPI.io API key.
+Store real values in `.env` or your deployment platform's secret manager. Never
+place them in source code, documentation, public issues, logs, or screenshots.
 
-## Jika secret bocor
+## If a secret is exposed
 
-1. Rotasi token atau API key dari penyedia terkait.
-2. Perbarui secret pada platform deployment.
-3. Hapus nilai dari file aktif.
-4. Bersihkan nilai dari riwayat Git; menghapus commit terbaru saja tidak cukup.
-5. Periksa aktivitas bot dan API yang tidak dikenali.
+1. Rotate the token or API key with the relevant provider.
+2. Update the secret on the deployment platform.
+3. Remove the value from active files.
+4. Remove it from the Git history; deleting the latest commit is not enough.
+5. Review bot and API activity for anything unexpected.
 
-## Data runtime
+## Runtime data
 
-File berikut dapat mengungkap pola penggunaan dan tidak perlu dipublikasikan:
+These files may reveal usage patterns and should remain private:
 
 - `seen_items.json`;
 - `sent_signatures.json`;
 - `telegram_update_offset.json`.
 
-Semua file tersebut sudah tercantum dalam `.gitignore`.
+All of them are included in `.gitignore`.
 
-## Melaporkan masalah
+## Reporting a vulnerability
 
-Jangan membuat issue publik yang berisi token, chat ID privat, data grup, atau
-langkah eksploitasi lengkap. Hubungi pemilik repository secara pribadi dengan
-ringkasan dampak dan langkah reproduksi minimum yang sudah disensor.
+Do not open a public issue containing tokens, private chat IDs, group data, or
+complete exploitation details. Contact the repository owner privately with a
+short impact summary and sanitized reproduction steps.
