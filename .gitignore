@@ -13,6 +13,7 @@ __pycache__/
 seen_items.json
 sent_signatures.json
 telegram_update_offset.json
+ai_theme_state.json
 
 # Logs and local tooling
 *.log

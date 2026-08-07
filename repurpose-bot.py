@@ -2,7 +2,7 @@
 Multi-Topic News Curator Bot (No-AI Version)
 --------------------------------------------
 1 bot, 1 GRUP Telegram (pakai fitur Topics), 6 topik:
-  - AI
+  - AI Tools & Tutorial (berita AI + ide konten harian, tema dirotasi)
   - Crypto
   - Viral Indonesia
   - Entertainment Indonesia
@@ -108,11 +108,12 @@ TOPIC_RELEVANCE = {
 }
 
 POLITICS_PRIORITY_KEYWORDS = {
-    "prabowo", "gibran", "mbg", "makan bergizi gratis", "bgn",
-    "badan gizi nasional", "kabinet merah putih", "danantara", "reshuffle",
-    "polemik", "kontroversi", "konflik", "kisruh", "bantah", "kritik",
-    "desak", "demo", "demonstrasi", "korupsi", "kpk", "skandal",
-    "nepotisme", "ditangkap", "diciduk", "diperiksa", "mundur",
+    "prabowo", "gibran", "jokowi", "anies", "ganjar", "mbg",
+    "makan bergizi gratis", "bgn", "badan gizi nasional", "kabinet merah putih",
+    "danantara", "reshuffle", "polemik", "kontroversi", "konflik", "kisruh",
+    "bantah", "kritik", "desak", "demo", "demonstrasi", "korupsi", "kpk",
+    "skandal", "nepotisme", "ditangkap", "diciduk", "diperiksa", "mundur",
+    "pansus", "anggaran", "apbn", "pajak", "subsidi", "sidak",
 }
 
 LOW_VALUE_PATTERNS = {
@@ -205,10 +206,11 @@ def keyword_boost(text, extra_keywords=None):
 
 PROFILES = [
     {
-        "key": "ai",
-        "label": "\U0001F916 AI",
+        "key": "ai_tools",
+        "label": "\U0001F916 AI Tools & Tutorial",
         "thread_id": _get_thread_id("TOPIC_AI_THREAD_ID"),
-        "min_score": 10,
+        "min_score": 15,
+        "max_items": AI_TOOLS_MAX_ITEMS,
         "rss_feeds": {
             "TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
             "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
@@ -217,15 +219,28 @@ PROFILES = [
             "Wired AI": "https://www.wired.com/feed/tag/ai/latest/rss",
             "MIT Tech Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
             "DailySocial (ID)": "https://dailysocial.id/feed",
+            "Simon Willison": "https://simonwillison.net/atom/everything/",
             "Google News (AI)": (
                 "https://news.google.com/rss/search?q=%22artificial+intelligence%22"
                 "+OR+AI+OR+chatgpt+OR+llm&hl=id&gl=ID&ceid=ID:id"
+            ),
+            "Google News (AI Tools, ID)": (
+                "https://news.google.com/rss/search?q=%28AI+tools+OR+ChatGPT+tips+OR+"
+                "AI+tutorial%29+when%3A1d&hl=id&gl=ID&ceid=ID:id"
+            ),
+            "Google News (AI Tutorial, EN)": (
+                "https://news.google.com/rss/search?q=%28AI+tutorial+OR+ChatGPT+tips+OR+"
+                "AI+workflow%29+when%3A1d&hl=en-US&gl=US&ceid=US:en"
+            ),
+            "Google News (Tips & How-to AI)": (
+                "https://news.google.com/rss/search?q=%28tutorial+OR+tips+OR+%22how+to+use%22%29+"
+                "AI+when%3A1d&hl=id&gl=ID&ceid=ID:id"
             ),
         },
         "twitter_queries": [
             "(\"artificial intelligence\" OR AI OR chatgpt OR llm OR openai) min_faves:300 lang:en",
         ],
-        "extra_keywords": None,
+        "extra_keywords": AI_TOOLS_KEYWORDS,
     },
     {
         "key": "crypto",
@@ -305,10 +320,9 @@ PROFILES = [
     {
         "key": "politics_id",
         "label": "\U0001F3DB\uFE0F Politik Indonesia",
-        # Pakai variable baru jika ada; fallback ke thread AI Tools lama.
-        "thread_id": _get_thread_id("TOPIC_POLITICS_THREAD_ID") or _get_thread_id("TOPIC_AI_TOOLS_THREAD_ID"),
-        "min_score": 35,
-        "max_age_hours": 1,
+        "thread_id": _get_thread_id("TOPIC_POLITICS_THREAD_ID"),
+        "min_score": 40,
+        "max_age_hours": 3,
         "rss_feeds": {
             "ANTARA Politik": "https://www.antaranews.com/rss/politik.xml",
             "CNN Indonesia Nasional": "https://www.cnnindonesia.com/nasional/rss",
@@ -319,6 +333,13 @@ PROFILES = [
             "CNBC Indonesia News": "https://www.cnbcindonesia.com/news/rss",
             "Republika": "https://www.republika.co.id/rss",
             "Suara News": "https://www.suara.com/rss/news",
+            "Detik News": "https://rss.detik.com/index.php/detikcom",
+            "Kompas (via Google News)": (
+                "https://news.google.com/rss/search?q=site%3Akompas.com+when%3A1d&hl=id&gl=ID&ceid=ID:id"
+            ),
+            "Kompas Politik (via Google News)": (
+                "https://news.google.com/rss/search?q=site%3Akompas.com+politik+when%3A1d&hl=id&gl=ID&ceid=ID:id"
+            ),
             "Google News - Politik Indonesia": (
                 "https://news.google.com/rss/search?q=politik+Indonesia+when%3A1d&hl=id&gl=ID&ceid=ID:id"
             ),
@@ -333,6 +354,9 @@ PROFILES = [
             ),
             "Google News - KPK & Politik Hukum": (
                 "https://news.google.com/rss/search?q=%28KPK+OR+korupsi+OR+MK%29+politik+Indonesia+when%3A1d&hl=id&gl=ID&ceid=ID:id"
+            ),
+            "Google News - Ekonomi & Anggaran": (
+                "https://news.google.com/rss/search?q=%28ekonomi+OR+anggaran+OR+APBN+OR+pajak+OR+subsidi%29+Indonesia+when%3A1d&hl=id&gl=ID&ceid=ID:id"
             ),
             "Google News - DPR RI Resmi": (
                 "https://news.google.com/rss/search?q=site%3Adpr.go.id+when%3A3d&hl=id&gl=ID&ceid=ID:id"
@@ -440,7 +464,13 @@ def fetch_rss_items(rss_feeds, max_age_hours=MAX_AGE_HOURS):
     items = []
     for source_name, url in rss_feeds.items():
         try:
-            feed = feedparser.parse(url)
+            resp = requests.get(
+                url,
+                timeout=12,
+                headers={"User-Agent": "Mozilla/5.0 (news-bot/1.0)"},
+            )
+            resp.raise_for_status()
+            feed = feedparser.parse(resp.content)
             for entry in feed.entries[:10]:
                 published = entry.get("published_parsed") or entry.get("updated_parsed")
                 if not is_recent_enough(published, max_hours=max_age_hours):
@@ -561,42 +591,100 @@ def passes_content_filter(profile, item):
     if key == "ai_tools":
         if contains_phrase(normalized, NOT_PUBLIC_PATTERNS):
             return False, "belum tersedia untuk publik"
-        tool_signal = contains_phrase(normalized, AI_TOOLS_KEYWORDS) or contains_phrase(
-            normalized, {"github", "tool", "app", "tutorial", "workflow", "api", "open source", "self hosted"}
-        )
-        if not tool_signal:
-            return False, "bukan tools/tutorial"
+        # Gak ada hard filter "harus tools/tutorial": berita perkembangan AI
+        # (riset/model baru) juga boleh lolos. Yang jelas-jelas "coming soon"
+        # aja yang ditolak, sisanya dikasih ide konten.
 
     return True, ""
 
 
-def build_ai_tools_content_idea(item):
-    """Bikin arahan konten sederhana tanpa AI/generative API."""
+# ============================================================
+# GENERATOR IDE KONTEN AI (tema harian dirotasi biar gak bosen)
+# ============================================================
+
+AI_TOOLS_THEMES = ["tutorial", "tips", "comparison", "alternative", "update", "workflow"]
+AI_THEME_FILE = "ai_theme_state.json"
+
+
+def load_ai_theme_index():
+    try:
+        with open(AI_THEME_FILE, "r") as f:
+            return int(json.load(f).get("index", 0)) % len(AI_TOOLS_THEMES)
+    except Exception:
+        return 0
+
+
+def save_ai_theme_index(index):
+    try:
+        with open(AI_THEME_FILE, "w") as f:
+            json.dump({"index": index}, f)
+    except Exception:
+        pass
+
+
+def build_ai_tools_content_idea(item, theme=None):
+    """Bikin arahan konten sederhana tanpa AI/generative API.
+
+    Ada 6 angle (tutorial, tips, comparison, alternative, update, workflow).
+    Tema hari ini cuma MENGUTAMAKAN angle yang cocok sama temanya — kalau
+    kontennya gak cocok, fallback ke angle yang paling pas dari isi berita.
+    Hasilnya tiap hari variasi idenya beda-beda.
+    """
     title = item["title"].strip()
     text = f"{title} {item.get('preview', '')}"
 
-    if contains_phrase(text, {"open source", "open-source", "self hosted", "self-hosted", "free alternative"}):
-        angle = "Alternatif gratis/open-source untuk memangkas biaya subscription"
-        hook = f"Gak harus bayar mahal: coba alternatif dari {title}"
-        points = "fungsi utama, tool berbayar yang bisa diganti, cara mulai, dan biaya server/API"
-    elif contains_phrase(text, {"how to", "tutorial", "guide", "workflow", "step by step", "automation"}):
-        angle = "Tutorial praktis yang bisa langsung diikuti"
-        hook = f"Cara pakai {title} untuk workflow kerja yang lebih cepat"
-        points = "masalah awal, langkah setup, contoh penggunaan, hasil, dan batasannya"
-    elif contains_phrase(text, {"vs", "alternative to", "comparison", "cheaper than"}):
-        angle = "Perbandingan tool untuk membantu audiens memilih"
-        hook = f"Sebelum langganan, bandingkan dulu: {title}"
-        points = "fitur, harga, kemudahan, kualitas hasil, privasi, dan target pengguna"
-    elif contains_phrase(text, {"launch", "launches", "released", "release", "new feature", "update", "now available"}):
-        angle = "Update tool baru dan dampaknya ke workflow pengguna"
-        hook = f"Update ini layak dicoba? {title}"
-        points = "apa yang berubah, siapa yang terbantu, contoh use case, akses, harga, dan kekurangan"
-    else:
-        angle = "Eksplorasi tool dan use case nyata"
-        hook = f"Tool AI ini bisa dipakai buat apa? {title}"
-        points = "fungsi utama, target pengguna, demo singkat, hasil nyata, harga, dan alternatif"
+    angles = [
+        ("tutorial", {"how to", "tutorial", "guide", "step by step", "setup",
+                      "install", "walkthrough", "cara pakai", "cara install",
+                      "cara setup", "panduan"},
+         "Tutorial praktis yang bisa langsung diikuti",
+         lambda t: f"Cara pakai {t} buat kerjaan sehari-hari yang lebih cepat",
+         "masalah awal, langkah setup, contoh penggunaan, hasil nyata, dan batasannya"),
+        ("tips", {"tips", "tricks", "best practices", "prompt", "hemat", "faster",
+                  "efficient", "tips and tricks", "tips ai", "trik", "jurus"},
+         "Tips & trik biar makin jago",
+         lambda t: f"{t}: trik yang jarang diketahui orang",
+         "cara cepat, trik tersembunyi, contoh prompt, hasil sebelum-sesudah"),
+        ("comparison", {"vs", "comparison", "compare", "compared", "cheaper than",
+                        "banding", "perbandingan"},
+         "Perbandingan tool buat bantu audiens milih",
+         lambda t: f"Sebelum langganan, bandingkan dulu: {t}",
+         "fitur, harga, kemudahan, kualitas hasil, privasi, dan target pengguna"),
+        ("alternative", {"open source", "open-source", "self hosted", "self-hosted",
+                         "free alternative", "alternatif", "gratis",
+                         "tanpa langganan"},
+         "Alternatif gratis/open-source buat pangkas biaya subscription",
+         lambda t: f"Gak harus bayar mahal: coba alternatif dari {t}",
+         "fungsi utama, tool berbayar yang bisa diganti, cara mulai, biaya server/API"),
+        ("update", {"launch", "launches", "released", "release", "new feature",
+                    "update", "now available", "unveils", "announces", "rolls out"},
+         "Update terbaru & dampaknya ke pemakaian harian",
+         lambda t: f"Update ini layak dicoba? {t}",
+         "apa yang berubah, siapa yang terbantu, contoh use case, akses & harga, kekurangan"),
+        ("workflow", {"workflow", "automation", "automate", "pipeline",
+                      "integrasi", "otomatis", "workflow otomatis"},
+         "Workflow/otomasi biar kerjaan kelar sendiri",
+         lambda t: f"Bangun workflow otomatis pakai {t}",
+         "tahapan alur kerja, tools pendukung, contoh output, waktu yang dihemat, cara mulai"),
+    ]
+    default = (
+        "explore", set(),
+        "Eksplorasi tool & use case nyata",
+        lambda t: f"Tool AI ini bisa dipakai buat apa? {t}",
+        "fungsi utama, target pengguna, contoh pemakaian, hasil nyata, harga, dan alternatif",
+    )
 
-    return {"angle": angle, "hook": hook, "points": points}
+    matched = [a for a in angles if contains_phrase(text, a[1])]
+    if theme is not None:
+        # Tema hari ini diutamakan kalau kontennya cocok, sisanya tetap masuk.
+        themed = [a for a in matched if a[0] == theme]
+        if themed:
+            matched = themed + [a for a in matched if a[0] != theme]
+    if not matched:
+        matched = [default]
+
+    angle, _, label, hook_fn, points = matched[0]
+    return {"angle": label, "hook": hook_fn(title), "points": points}
 
 
 def compute_viral_scores(items, extra_keywords=None):
@@ -875,11 +963,18 @@ def run_profile(profile, seen, signatures):
     ]
     new_items = []
     rejected_content = 0
+    theme = None
+    if key == "ai_tools":
+        theme_index = load_ai_theme_index()
+        theme = AI_TOOLS_THEMES[theme_index]
+        save_ai_theme_index((theme_index + 1) % len(AI_TOOLS_THEMES))
+        log.info(f"[{label}] Tema ide hari ini: {theme}")
+
     for item in candidates:
         passed, reason = passes_content_filter(profile, item)
         if passed:
             if key == "ai_tools":
-                item["content_idea"] = build_ai_tools_content_idea(item)
+                item["content_idea"] = build_ai_tools_content_idea(item, theme=theme)
             new_items.append(item)
         else:
             rejected_content += 1

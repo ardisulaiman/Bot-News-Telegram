@@ -10,8 +10,12 @@ manually before publishing it elsewhere.
 
 ## Key features
 
-- Curates AI, crypto, Indonesian viral news, Indonesian entertainment, global
-  viral news, and Indonesian politics.
+- Curates AI tools & tutorials (setiap item dikasih ide konten: angle, ide
+  judul, bahan bahasan — tema harian dirotasi biar idenya gak abis), crypto,
+  Indonesian viral news, Indonesian entertainment, global viral news, and
+  Indonesian politics (sumber diperluas: ANTARA, CNN ID, Tempo, Kompas via
+  Google News, Detik, CNBC ID, Republika, Suara, dst).
+- Skor minimal politik dinaikkan biar yang dikirim cuma yang paling viral.
 - Uses a dedicated set of RSS feeds for each topic.
 - Supports X as an optional source through TwitterAPI.io.
 - Calculates viral scores from keywords, engagement, and cross-source coverage.
