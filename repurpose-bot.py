@@ -1,12 +1,11 @@
 """
 Multi-Topic News Curator Bot (No-AI Version)
 --------------------------------------------
-1 bot, 1 GRUP Telegram (pakai fitur Topics), 6 topik:
+1 bot, 1 GRUP Telegram (pakai fitur Topics), 5 topik:
   - AI Tools & Tutorial (berita AI + ide konten harian, tema dirotasi)
   - Crypto
-  - Viral Indonesia
+  - Viral (Sosmed) — deteksi yang lagi rame di sosmed Indonesia, 2 jam terakhir
   - Entertainment Indonesia
-  - Viral Global
   - Politik Indonesia
 
 Tiap topik ambil dari sumbernya sendiri, kurasi ketat (cuma yang skornya
@@ -29,6 +28,7 @@ import requests
 import feedparser
 from datetime import datetime, timezone, timedelta
 from dotenv import load_dotenv
+from urllib.parse import quote
 
 load_dotenv()
 
@@ -49,6 +49,8 @@ SIGNATURES_FILE = "sent_signatures.json"
 MAX_ITEMS_PER_TOPIC = int(os.getenv("MAX_ITEMS_PER_TOPIC", 6))
 AI_TOOLS_MAX_ITEMS = int(os.getenv("AI_TOOLS_MAX_ITEMS", 10))
 POLITICS_MAX_ITEMS = int(os.getenv("POLITICS_MAX_ITEMS", 15))
+VIRAL_MAX_ITEMS = int(os.getenv("VIRAL_MAX_ITEMS", 5))
+TRENDS_TOP_N = int(os.getenv("TRENDS_TOP_N", 6))
 DEDUPE_HOURS = int(os.getenv("DEDUPE_HOURS", 72))
 TRANSLATE_SOURCE_LANG = os.getenv("TRANSLATE_SOURCE_LANG", "en")
 TELEGRAM_OFFSET_FILE = "telegram_update_offset.json"
@@ -152,7 +154,54 @@ INDO_VIRAL_KEYWORDS = {
     "terungkap", "mengejutkan", "gegerkan", "kecaman", "protes", "demo",
 }
 
-# Buat topic "Viral Global" — campur EN+ID, semua sektor (bukan cuma politik)
+# Buat topic "Viral (Sosmed)" — deteksi yang lagi rame banget dibahas di sosmed
+# Indonesia dalam 2 jam terakhir. Sinyal "rame": Google Trends (istilah yang lagi
+# dicari banyak orang) + Google News 2 jam terakhir + kata kunci netizen.
+TRENDS_RSS_URL = "https://trends.google.com/trending/rss?geo=ID"
+VIRAL_SOSMED_QUERY = (
+    "https://news.google.com/rss/search?q=%28viral+OR+heboh+OR+geger+OR+"
+    "netizen+OR+ramai%29+when%3A2h&hl=id&gl=ID&ceid=ID:id"
+)
+
+
+def fetch_trending_terms(limit=TRENDS_TOP_N):
+    """Istilah yang lagi trending di Indonesia dari Google Trends RSS (gratis, tanpa API key)."""
+    try:
+        resp = requests.get(
+            TRENDS_RSS_URL,
+            timeout=12,
+            headers={"User-Agent": "Mozilla/5.0 (news-bot/1.0)"},
+        )
+        resp.raise_for_status()
+        feed = feedparser.parse(resp.content)
+        terms = []
+        for entry in feed.entries:
+            title = (entry.get("title") or "").strip()
+            if title and title.lower() != "daily search trends":
+                terms.append(title)
+        return terms[:limit]
+    except Exception as e:
+        log.warning(f"Gagal ambil Google Trends: {e}")
+        return []
+
+
+def build_viral_feeds(terms):
+    """Feed Google News dari istilah trending (when:2h) + query kata kunci viral sosmed.
+
+    Tiap istilah trending jadi query Google News sendiri biar berita soal topik
+    yang lagi rame itu ketarik. Plus 1 query umum kata kunci netizen 2 jam.
+    """
+    feeds = {}
+    for i, term in enumerate(terms[:TRENDS_TOP_N], 1):
+        query = quote(term) + "+when%3A2h"
+        feeds[f"Trending #{i}"] = (
+            f"https://news.google.com/rss/search?q={query}&hl=id&gl=ID&ceid=ID:id"
+        )
+    feeds["Viral SOSMED (2 jam)"] = VIRAL_SOSMED_QUERY
+    return feeds
+
+
+# Kata kunci viral versi EN (buat boost berita luar yang ikut rame di sosmed ID)
 GLOBAL_VIRAL_KEYWORDS = {
     "viral", "trending", "goes viral", "internet reacts", "internet is",
     "everyone is talking", "sparks debate", "sparks outrage", "reacts",
@@ -266,18 +315,19 @@ PROFILES = [
         "extra_keywords": None,
     },
     {
-        "key": "viral_id",
-        "label": "\U0001F1EE\U0001F1E9 Viral Indonesia",
+        "key": "viral",
+        "label": "\U0001F525 Viral (Sosmed)",
         "thread_id": _get_thread_id("TOPIC_VIRAL_THREAD_ID"),
-        "min_score": 15,
+        "min_score": 35,
+        "max_age_hours": 2,
+        "max_items": VIRAL_MAX_ITEMS,
         "rss_feeds": {
             "Tribunnews": "https://www.tribunnews.com/rss",
             "Liputan6 News": "https://feed.liputan6.com/rss/news",
             "Viva News": "https://www.viva.co.id/get/all",
-            "Antara (EN)": "https://en.antaranews.com/rss/news.xml",
         },
         "twitter_queries": [],
-        "extra_keywords": INDO_VIRAL_KEYWORDS,
+        "extra_keywords": INDO_VIRAL_KEYWORDS | GLOBAL_VIRAL_KEYWORDS,
     },
     {
         "key": "entertainment_id",
@@ -291,31 +341,6 @@ PROFILES = [
         },
         "twitter_queries": [],
         "extra_keywords": INDO_VIRAL_KEYWORDS,
-    },
-    {
-        "key": "viral_global",
-        "label": "\U0001F30D Viral Global",
-        "thread_id": _get_thread_id("TOPIC_VIRAL_GLOBAL_THREAD_ID"),
-        "min_score": 20,
-        "rss_feeds": {
-            "BBC News": "https://feeds.bbci.co.uk/news/rss.xml",
-            "Reuters World": "https://www.reutersagency.com/feed/?best-topics=world&post_type=best",
-            "AP News": "https://rsshub.app/apnews/topics/ap-top-news",
-            "Google News (Global Viral, EN)": (
-                "https://news.google.com/rss/search?q=viral+OR+%22goes+viral%22+"
-                "OR+trending&hl=en-US&gl=US&ceid=US:en"
-            ),
-            "Google News (Global Viral, ID)": (
-                "https://news.google.com/rss/search?q=viral+OR+heboh+OR+"
-                "trending&hl=id&gl=ID&ceid=ID:id"
-            ),
-            "Detik News": "https://rss.detik.com/index.php/detikcom",
-            "Kompas News": "https://rss.kompas.com/index.php/tag/-",
-        },
-        "twitter_queries": [
-            "(viral OR trending) min_faves:1000 lang:en",
-        ],
-        "extra_keywords": GLOBAL_VIRAL_KEYWORDS,
     },
     {
         "key": "politics_id",
@@ -942,8 +967,20 @@ def run_profile(profile, seen, signatures):
         log.warning(f"[{label}] Thread ID topic belum diisi di .env, skip topik ini.")
         return
 
+    if key == "viral":
+        # Feed-nya dibangun dinamis tiap siklus dari istilah yang lagi trending
+        # di Google Trends + query kata kunci viral 2 jam terakhir.
+        terms = fetch_trending_terms()
+        feeds = build_viral_feeds(terms)
+        if terms:
+            log.info(f"[{label}] Trending Indonesia: {', '.join(terms)}")
+        else:
+            log.info(f"[{label}] Google Trends kosong — pakai feed statis + query viral 2 jam.")
+    else:
+        feeds = profile["rss_feeds"]
+
     all_items = fetch_rss_items(
-        profile["rss_feeds"],
+        feeds,
         max_age_hours=profile.get("max_age_hours", MAX_AGE_HOURS),
     ) + fetch_twitter_items(profile["twitter_queries"])
     all_items = compute_viral_scores(all_items, profile.get("extra_keywords"))
