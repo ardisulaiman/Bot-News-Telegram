@@ -770,7 +770,7 @@ def send_telegram_message(chat_id, text, thread_id=None):
         "chat_id": chat_id,
         "text": text,
         "parse_mode": "HTML",
-        "disable_web_page_preview": False,
+        "disable_web_page_preview": True,
     }
     if thread_id is not None:
         payload["message_thread_id"] = thread_id
