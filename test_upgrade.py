@@ -99,7 +99,7 @@ check("profil viral max_items 5", viral.get("max_items") == rb.VIRAL_MAX_ITEMS)
 
 print()
 print("=" * 60)
-print("6) PREVIEW LINK DIMATIKAN (disable_web_page_preview=True)")
+print("6) PREVIEW LINK AKTIF (disable_web_page_preview=False)")
 print("=" * 60)
 captured = {}
 
@@ -122,7 +122,7 @@ finally:
     rb.requests.post = orig_post
 payload = captured.get("data") or {}
 check("kirim sukses", ok is True)
-check("disable_web_page_preview True", payload.get("disable_web_page_preview") is True)
+check("disable_web_page_preview False (preview aktif)", payload.get("disable_web_page_preview") is False)
 check("parse_mode HTML", payload.get("parse_mode") == "HTML")
 check("thread_id kepassing", payload.get("message_thread_id") == 678)
 
