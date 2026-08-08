@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Functional test for the upgraded bot logic."""
+"""Functional test for the upgraded bot logic.
+
+Bukan pytest — script manual yang nge-assert perilaku penting dan exit
+non-zero kalau ada yang gagal. Jalankan: .venv/Scripts/python test_upgrade.py
+"""
 import io
 import importlib.util
 import os
@@ -9,10 +13,19 @@ REPO_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, REPO_DIR)
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
+FAILURES = []
+
 # repurpose-bot.py punya strip (-) di nama, jadi gak bisa di-import biasa.
 _spec = importlib.util.spec_from_file_location("repurpose_bot", os.path.join(REPO_DIR, "repurpose-bot.py"))
 rb = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rb)
+
+
+def check(name, cond, detail=""):
+    status = "OK  " if cond else "FAIL"
+    print(f"  [{status}] {name}" + (f" -- {detail}" if detail else ""))
+    if not cond:
+        FAILURES.append(name)
 
 print("=" * 60)
 print("1) GENERATOR IDE KONTEN - 6 tema berbeda, 3 judul contoh")
@@ -68,3 +81,53 @@ items = rb.fetch_rss_items(feeds, max_age_hours=48)
 print(f"  Total item tertarik: {len(items)}")
 for it in items[:5]:
     print(f"   - [{it['source']}] {it['title'][:70]}")
+check("fetch feed baru ada isi", len(items) > 0, f"{len(items)} item")
+
+print()
+print("=" * 60)
+print("5) PROFIL VIRAL (Sosmed) - ganti viral_id + viral_global")
+print("=" * 60)
+profiles = {p["key"]: p for p in rb.PROFILES}
+viral = profiles.get("viral", {})
+check("5 profil total", len(profiles) == 5, f"keys={sorted(profiles)}")
+check("viral_id hilang", "viral_id" not in profiles)
+check("viral_global hilang", "viral_global" not in profiles)
+check("entertainment_id aman", "entertainment_id" in profiles)
+check("profil viral min_score 35", viral.get("min_score") == 35)
+check("profil viral max_age 2 jam", viral.get("max_age_hours") == 2)
+check("profil viral max_items 5", viral.get("max_items") == rb.VIRAL_MAX_ITEMS)
+
+print()
+print("=" * 60)
+print("6) PREVIEW LINK DIMATIKAN (disable_web_page_preview=True)")
+print("=" * 60)
+captured = {}
+
+
+class FakeResp:
+    def raise_for_status(self):
+        pass
+
+
+def fake_post(url, data=None, timeout=None, **kwargs):
+    captured["data"] = data
+    return FakeResp()
+
+
+orig_post = rb.requests.post
+rb.requests.post = fake_post
+try:
+    ok = rb.send_telegram_message(12345, "<b>x</b>", thread_id=678)
+finally:
+    rb.requests.post = orig_post
+payload = captured.get("data") or {}
+check("kirim sukses", ok is True)
+check("disable_web_page_preview True", payload.get("disable_web_page_preview") is True)
+check("parse_mode HTML", payload.get("parse_mode") == "HTML")
+check("thread_id kepassing", payload.get("message_thread_id") == 678)
+
+print()
+if FAILURES:
+    print(f"RESULT: {len(FAILURES)} FAILURE(S): {FAILURES}")
+    sys.exit(1)
+print("RESULT: ALL CHECKS PASSED")
